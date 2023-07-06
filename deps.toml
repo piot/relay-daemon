@@ -1,0 +1,16 @@
+depsversion = "0.0.0"
+
+name = "piot/relay-daemon"
+version = "0.0.0"
+
+[[dependencies]]
+name = "piot/relay-server-lib"
+version = "*"
+
+[[dependencies]]
+name = 'piot/udp-server-c'
+version = "*"
+
+[[dependencies]]
+name = 'piot/udp-client-c'
+version = "*"

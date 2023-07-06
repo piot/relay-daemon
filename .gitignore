@@ -1,0 +1,14 @@
+.cmake/
+.idea/
+CMakeFiles
+Testing/
+deps/
+CMakeFiles
+Makefile
+cmake_install.cmake
+*.a
+build.ninja
+CMakeCache.txt
+.ninja_deps
+.ninja_log
+src/lib/relay-daemon
