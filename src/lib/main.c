@@ -8,8 +8,10 @@
 #include <flood/in_stream.h>
 #include <flood/out_stream.h>
 #include <flood/text_in_stream.h>
+#include <guise-client/client.h>
+#include <guise-client/network_realizer.h>
+#include <guise-serialize/parse_text.h>
 #include <imprint/default_setup.h>
-#include <inttypes.h>
 #include <relay-server-lib/utils.h>
 #include <udp-client/udp_client.h>
 
@@ -52,6 +54,46 @@ static ssize_t udpClientSocketInfoReceive(void* _self, uint8_t* data, size_t siz
     return udpClientReceive(self->clientSocket, data, size);
 }
 
+typedef struct Secret {
+    GuiseSerializeUserId userId;
+    uint64_t passwordHash;
+} Secret;
+
+static int readSecret(Secret* secret)
+{
+    CLOG_DEBUG("reading secret file")
+    FILE* fp = fopen("users.txt", "r");
+    if (fp == 0) {
+        CLOG_ERROR("could not find users.txt")
+        //        return -4;
+    }
+
+    char line[1024];
+    char* ptr = fgets(line, 1024, fp);
+    if (ptr == 0) {
+        return -39;
+    }
+    fclose(fp);
+
+    FldTextInStream textInStream;
+    FldInStream inStream;
+
+    fldInStreamInit(&inStream, (const uint8_t*) line, tc_strlen(line));
+    fldTextInStreamInit(&textInStream, &inStream);
+
+    GuiseSerializeUserInfo userInfo;
+
+    int err = guiseTextStreamReadUser(&textInStream, &userInfo);
+    if (err < 0) {
+        return err;
+    }
+
+    secret->userId = userInfo.userId;
+    secret->passwordHash = userInfo.passwordHash;
+
+    return 0;
+}
+
 int main(int argc, char* argv[])
 {
     (void) argc;
@@ -60,7 +102,14 @@ int main(int argc, char* argv[])
     g_clog.log = clog_console;
     g_clog.level = CLOG_TYPE_VERBOSE;
 
-    CLOG_OUTPUT("relay daemon v%s starting up", USER_DAEMON_VERSION)
+    CLOG_OUTPUT("relay daemon v%s starting up", RELAY_DAEMON_VERSION)
+
+    Secret secret;
+    int secretErr = readSecret(&secret);
+    if (secretErr < 0) {
+        CLOG_SOFT_ERROR("could not read lines from secret.txt %d", secretErr)
+        return secretErr;
+    }
 
     RelayDaemon daemon;
 
@@ -92,7 +141,7 @@ int main(int argc, char* argv[])
 
     UdpClientSocket udpClient;
     const static char* GUISE_SERVER_URL = "127.0.0.1";
-    int udpClientErr = udpClientInit(&udpClient, GUISE_SERVER_URL, 26003);
+    int udpClientErr = udpClientInit(&udpClient, GUISE_SERVER_URL, 27004);
     if (udpClientErr < 0) {
         return udpClientErr;
     }
@@ -105,25 +154,60 @@ int main(int argc, char* argv[])
     guiseTransport.send = udpClientSocketInfoSend;
     guiseTransport.self = &guiseSocket;
 
-    GuiseSerializeUserSessionId authenticatedUserSessionId = 0;
-    relayServerInit(&server, &memory.tagAllocator.info, authenticatedUserSessionId, guiseTransport, serverLog);
+    GuiseClientRealize clientRealize;
+    GuiseClientRealizeSettings guiseClientSettings;
 
-#define UDP_MAX_SIZE (1200)
+    guiseClientSettings.memory = &memory.tagAllocator.info;
+    guiseClientSettings.transport = guiseTransport;
+    guiseClientSettings.userId = secret.userId;
+    guiseClientSettings.secretPasswordHash = secret.passwordHash;
+    Clog guiseClientLog;
+    guiseClientLog.config = &g_clog;
+    guiseClientLog.constantPrefix = "GuiseClient";
+    guiseClientSettings.log = guiseClientLog;
 
-    uint8_t buf[UDP_MAX_SIZE];
+    guiseClientRealizeInit(&clientRealize, &guiseClientSettings);
+    guiseClientRealizeReInit(&clientRealize, &guiseClientSettings);
+    GuiseClientState reportedState = GuiseClientStateIdle;
+
+    uint8_t buf[DATAGRAM_TRANSPORT_MAX_SIZE];
     struct sockaddr_in address;
     int errorCode;
 
-#define UDP_REPLY_MAX_SIZE (UDP_MAX_SIZE)
-
-    uint8_t reply[UDP_REPLY_MAX_SIZE];
+    uint8_t reply[DATAGRAM_TRANSPORT_MAX_SIZE];
     FldOutStream outStream;
-    fldOutStreamInit(&outStream, reply, UDP_REPLY_MAX_SIZE);
+    fldOutStreamInit(&outStream, reply, DATAGRAM_TRANSPORT_MAX_SIZE);
 
     CLOG_OUTPUT("ready for incoming UDP packets")
+    bool hasCreatedRelayServer = false;
 
     while (true) {
-        ssize_t receivedOctetCount = udpServerReceive(&daemon.socket, buf, UDP_MAX_SIZE, &address);
+        usleep(16 * 1000);
+
+        if (!hasCreatedRelayServer) {
+
+            MonotonicTimeMs now = monotonicTimeMsNow();
+            guiseClientRealizeUpdate(&clientRealize, now);
+        }
+
+        if (reportedState != clientRealize.client.state) {
+            reportedState = clientRealize.client.state;
+            if (reportedState == GuiseClientStateLoggedIn && !hasCreatedRelayServer) {
+                relayServerInit(&server, &memory.tagAllocator.info, clientRealize.client.mainUserSessionId,
+                                guiseTransport, serverLog);
+                CLOG_C_INFO(&server.log, "server authenticated")
+                hasCreatedRelayServer = true;
+                guiseClientRealizeDestroy(&clientRealize);
+            }
+        }
+        if (!hasCreatedRelayServer) {
+            continue;
+        }
+
+        relayServerUpdate(&server);
+
+        ssize_t receivedOctetCount = udpServerReceive(&daemon.socket, buf, DATAGRAM_TRANSPORT_MAX_SIZE,
+                                                      &address);
         if (receivedOctetCount < 0) {
             CLOG_WARN("problem with receive %zd", receivedOctetCount)
         } else {

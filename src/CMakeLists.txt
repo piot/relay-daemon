@@ -14,6 +14,7 @@ add_subdirectory("deps/piot/udp-client-c/src/lib")
 add_subdirectory("deps/piot/guise-session-client-c/src/lib")
 add_subdirectory("deps/piot/guise-serialize-c/src/lib")
 add_subdirectory("deps/piot/datagram-transport-c/src/lib")
+add_subdirectory("deps/piot/guise-client-c/src/lib")
 add_subdirectory("lib")
 
 # add_subdirectory("test")

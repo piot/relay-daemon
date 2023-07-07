@@ -110,7 +110,7 @@ else()
 endif()
 
 
-target_link_libraries(relay-daemon PUBLIC relay-server-lib PUBLIC udp-server PUBLIC udp-client)
+target_link_libraries(relay-daemon PUBLIC relay-server-lib PUBLIC guise-client PUBLIC udp-server PUBLIC udp-client)
 
 
 if(useSanitizers)

@@ -11,5 +11,5 @@ int relayDaemonInit(RelayDaemon* self)
         return err;
     }
 
-    return udpServerInit(&self->socket, 27004, true);
+    return udpServerInit(&self->socket, 27005, true);
 }
