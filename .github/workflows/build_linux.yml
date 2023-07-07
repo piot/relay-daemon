@@ -38,6 +38,6 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
-          name: Relay Daemon Linux Library
+          name: Relay Daemon Linux Executable
           path: |
             src/lib/librelay-daemon
