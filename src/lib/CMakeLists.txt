@@ -44,6 +44,7 @@ file(GLOB lib_src FOLLOW_SYMLINKS "./*.c")
 
 add_executable(relay-daemon ${lib_src})
 
+target_compile_definitions(relay-daemon PRIVATE _POSIX_C_SOURCE=200809L)
 
 if(APPLE)
   target_compile_definitions(relay-daemon PRIVATE TORNADO_OS_MACOS)
