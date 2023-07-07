@@ -26,7 +26,7 @@ jobs:
 
       - name: deps fetch dependencies
         run:
-          go run github.com/piot/deps/src/deps@main fetch -m clone -t src/deps
+          go run github.com/piot/deps/src/deps@main fetch -t src/deps
 
       - name: create cmake cache
         run: cmake -DCMAKE_BUILD_TYPE=Debug .
@@ -38,6 +38,6 @@ jobs:
 
       - uses: actions/upload-artifact@v2
         with:
-          name: Relay Daemon Linux Executable
+          name: Relay Daemon Linux Library
           path: |
-            src/lib/relay-daemon
+            src/lib/librelay-daemon

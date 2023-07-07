@@ -12,3 +12,5 @@ CMakeCache.txt
 .ninja_deps
 .ninja_log
 src/lib/relay-daemon
+src/deps.clean1869463330/deps.clean/piot
+src/lib/users.txt
