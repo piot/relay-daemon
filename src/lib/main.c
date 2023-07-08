@@ -219,7 +219,7 @@ int main(int argc, char* argv[])
 #endif
             errorCode = relayServerFeed(&server, &address, buf, (size_t) receivedOctetCount, &response);
             if (errorCode < 0) {
-                CLOG_WARN("guiseServerFeed: error %d", errorCode)
+                CLOG_WARN("relayServerFeed: error %d", errorCode)
             }
         }
     }
