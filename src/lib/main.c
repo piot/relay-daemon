@@ -14,6 +14,7 @@
 #include <imprint/default_setup.h>
 #include <relay-server-lib/utils.h>
 #include <udp-client/udp_client.h>
+#include <time.h>
 
 #if !defined TORNADO_OS_WINDOWS
 #include <errno.h>
@@ -182,7 +183,11 @@ int main(int argc, char* argv[])
     bool hasCreatedRelayServer = false;
 
     while (true) {
-        usleep(16 * 1000);
+        struct timespec ts;
+
+        ts.tv_sec = 0;
+        ts.tv_nsec = 16 * 1000000;
+        nanosleep(&ts, &ts);
 
         if (!hasCreatedRelayServer) {
 
