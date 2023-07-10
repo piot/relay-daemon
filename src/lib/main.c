@@ -9,12 +9,11 @@
 #include <flood/out_stream.h>
 #include <flood/text_in_stream.h>
 #include <guise-client/client.h>
-#include <guise-client/network_realizer.h>
 #include <guise-serialize/parse_text.h>
 #include <imprint/default_setup.h>
 #include <relay-server-lib/utils.h>
-#include <udp-client/udp_client.h>
 #include <time.h>
+#include <udp-client/udp_client.h>
 
 #if !defined TORNADO_OS_WINDOWS
 #include <errno.h>
@@ -155,20 +154,14 @@ int main(int argc, char* argv[])
     guiseTransport.send = udpClientSocketInfoSend;
     guiseTransport.self = &guiseSocket;
 
-    GuiseClientRealize clientRealize;
-    GuiseClientRealizeSettings guiseClientSettings;
+    GuiseClient guiseClient;
 
-    guiseClientSettings.memory = &memory.tagAllocator.info;
-    guiseClientSettings.transport = guiseTransport;
-    guiseClientSettings.userId = secret.userId;
-    guiseClientSettings.secretPasswordHash = secret.passwordHash;
     Clog guiseClientLog;
     guiseClientLog.config = &g_clog;
     guiseClientLog.constantPrefix = "GuiseClient";
-    guiseClientSettings.log = guiseClientLog;
 
-    guiseClientRealizeInit(&clientRealize, &guiseClientSettings);
-    guiseClientRealizeReInit(&clientRealize, &guiseClientSettings);
+    guiseClientInit(&guiseClient, &memory.tagAllocator.info, guiseClientLog);
+    guiseClientReInit(&guiseClient, &guiseTransport, secret.userId, secret.passwordHash);
     GuiseClientState reportedState = GuiseClientStateIdle;
 
     uint8_t buf[DATAGRAM_TRANSPORT_MAX_SIZE];
@@ -192,17 +185,17 @@ int main(int argc, char* argv[])
         if (!hasCreatedRelayServer) {
 
             MonotonicTimeMs now = monotonicTimeMsNow();
-            guiseClientRealizeUpdate(&clientRealize, now);
+            guiseClientUpdate(&guiseClient, now);
         }
 
-        if (reportedState != clientRealize.client.state) {
-            reportedState = clientRealize.client.state;
+        if (reportedState != guiseClient.state) {
+            reportedState = guiseClient.state;
             if (reportedState == GuiseClientStateLoggedIn && !hasCreatedRelayServer) {
-                relayServerInit(&server, &memory.tagAllocator.info, clientRealize.client.mainUserSessionId,
+                relayServerInit(&server, &memory.tagAllocator.info, guiseClient.mainUserSessionId,
                                 guiseTransport, serverLog);
                 CLOG_C_INFO(&server.log, "server authenticated")
                 hasCreatedRelayServer = true;
-                guiseClientRealizeDestroy(&clientRealize);
+                guiseClientDestroy(&guiseClient);
             }
         }
         if (!hasCreatedRelayServer) {

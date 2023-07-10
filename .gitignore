@@ -16,3 +16,4 @@ src/deps.clean1869463330/deps.clean/piot
 src/lib/users.txt
 deps*/
 .vscode/
+build/
