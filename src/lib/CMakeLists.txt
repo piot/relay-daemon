@@ -5,16 +5,15 @@ add_executable(relay-daemon
   daemon.c
   main.c)
 
-
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
-include(Tornado)
+include(Tornado.cmake)
 set_tornado(relay-daemon)
 
-target_include_directories(relay-daemon PUBLIC ../include)
+target_include_directories(relay-daemon PRIVATE ../include)
 
-target_link_libraries(relay-daemon 
-  PUBLIC relay-server-lib
-  PUBLIC guise-client
-  PUBLIC udp-server
-  PUBLIC udp-client)
+
+target_link_libraries(relay-daemon PUBLIC 
+  relay-server-lib
+  guise-client
+  udp-server
+  udp-client)
 

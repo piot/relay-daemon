@@ -8,7 +8,6 @@ macro(set_local_and_parent NAME VALUE)
 endmacro()
 
 function(set_tornado targetName)
-
   target_compile_features(${targetName} PUBLIC c_std_99)
   set_local_and_parent(CMAKE_C_EXTENSIONS false)
 
@@ -19,20 +18,18 @@ function(set_tornado targetName)
     set_local_and_parent(isDebug TRUE)
   else()
     message("detected release build")
-    set(isDebug
-        FALSE
-        PARENT_SCOPE)
+    set_local_and_parent(isDebug FALSE)
   endif()
 
   if(CMAKE_C_COMPILER_ID MATCHES "Clang")
-    set(COMPILER_NAME "clang")
-    set(COMPILER_CLANG TRUE)
+    set_local_and_parent(COMPILER_NAME "clang")
+    set_local_and_parent(COMPILER_CLANG TRUE)
   elseif(CMAKE_C_COMPILER_ID STREQUAL "GNU")
-    set(COMPILER_NAME "gcc")
-    set(COMPILER_GCC TRUE)
+    set_local_and_parent(COMPILER_NAME "gcc")
+    set_local_and_parent(COMPILER_GCC TRUE)
   elseif(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
-    set(COMPILER_NAME "msvc")
-    set(COMPILER_MSVC TRUE)
+    set_local_and_parent(COMPILER_NAME "msvc")
+    set_local_and_parent(COMPILER_MSVC TRUE)
   endif()
 
   message("detected compiler: '${CMAKE_C_COMPILER_ID}' (${COMPILER_NAME})")
@@ -46,11 +43,16 @@ function(set_tornado targetName)
 
   if(APPLE)
     set_local_and_parent(OS_MACOS TRUE)
+    set_local_and_parent(OS_NAME macos)
   elseif(UNIX)
     set_local_and_parent(OS_LINUX TRUE)
+    set_local_and_parent(OS_NAME linux)
   elseif(WIN32)
     set_local_and_parent(OS_WINDOWS TRUE)
+    set_local_and_parent(OS_NAME windows)
   endif()
+  string(TOLOWER ${CMAKE_SYSTEM_PROCESSOR} PROCESSOR)
+  set_local_and_parent(CPU_ARCHITECTURE ${PROCESSOR})
 
   # ----- Set Compile options depending on compiler
 
@@ -83,7 +85,6 @@ function(set_tornado targetName)
       ${targetName}
       PRIVATE /Wall
               /WX
-              # /F 5000000 # stack size
               /wd4820 # bytes padding added after data member
               /wd4668 # bug in winioctl.h (is not defined as a preprocessor
                       # macro, replacing with '0' for '#if/#elif')
@@ -102,23 +103,12 @@ function(set_tornado targetName)
 
   # ----- Set Compile Definitions based on build type and operating system
 
-  if(APPLE)
-    target_compile_definitions(${targetName} PRIVATE TORNADO_OS_MACOS)
-    set_local_and_parent(OS_MACOS 1)
-  elseif(UNIX)
-    target_compile_definitions(${targetName} PRIVATE TORNADO_OS_LINUX)
-    set_local_and_parent(OS_LINUX 1)
-  elseif(WIN32)
-    target_compile_definitions(${targetName} PRIVATE TORNADO_OS_WINDOWS)
-    set_local_and_parent(OS_WINDOWS 1)
-  endif()
-
-  if(OS_LINUX)
-    message("Linux Detected!")
-    target_compile_definitions(${targetName} PRIVATE TORNADO_OS_LINUX)
-  elseif(OS_MACOS)
+  if(OS_MACOS)
     message("MacOS detected!")
     target_compile_definitions(${targetName} PRIVATE TORNADO_OS_MACOS)
+  elseif(OS_LINUX)
+    message("Linux Detected!")
+    target_compile_definitions(${targetName} PRIVATE TORNADO_OS_LINUX)
   elseif(OS_WINDOWS)
     message("Windows detected!")
     target_compile_definitions(${targetName} PRIVATE TORNADO_OS_WINDOWS)
