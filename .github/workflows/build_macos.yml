@@ -34,3 +34,4 @@ jobs:
           name: Relay Daemon MacOS
           path: |
             src/lib/relay-daemon
+
