@@ -8,13 +8,9 @@ name = "piot/relay-server-lib"
 version = "*"
 
 [[dependencies]]
-name = "piot/guise-client-c"
-version = "*"
-
-[[dependencies]]
 name = 'piot/udp-server-c'
 version = "*"
 
 [[dependencies]]
-name = 'piot/udp-client-c'
+name = "piot/guise-client-udp-c"
 version = "*"

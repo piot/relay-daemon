@@ -1,19 +1,20 @@
-/*---------------------------------------------------------------------------------------------
- *  Copyright (c) Peter Bjorklund. All rights reserved.
+/*----------------------------------------------------------------------------------------------------------
+ *  Copyright (c) Peter Bjorklund. All rights reserved. https://github.com/piot/relay-daemon
  *  Licensed under the MIT License. See LICENSE in the project root for license information.
- *--------------------------------------------------------------------------------------------*/
+ *--------------------------------------------------------------------------------------------------------*/
 #include "daemon.h"
 #include "version.h"
 #include <clog/console.h>
 #include <flood/in_stream.h>
 #include <flood/out_stream.h>
 #include <flood/text_in_stream.h>
+#include <guise-client-udp/client.h>
+#include <guise-client-udp/read_secret.h>
 #include <guise-client/client.h>
 #include <guise-serialize/parse_text.h>
 #include <imprint/default_setup.h>
 #include <relay-server-lib/utils.h>
 #include <time.h>
-#include <udp-client/udp_client.h>
 
 #if !defined TORNADO_OS_WINDOWS
 #include <errno.h>
@@ -36,64 +37,6 @@ static int sendToAddress(void* self_, const RelayAddress* address, const uint8_t
     return udpServerSend(self->serverSocket, buf, count, self->sockAddrIn);
 }
 
-typedef struct UdpClientSocketInfo {
-    UdpClientSocket* clientSocket;
-} UdpClientSocketInfo;
-
-static int udpClientSocketInfoSend(void* _self, const uint8_t* data, size_t size)
-{
-    UdpClientSocketInfo* self = (UdpClientSocketInfo*) _self;
-
-    return udpClientSend(self->clientSocket, data, size);
-}
-
-static ssize_t udpClientSocketInfoReceive(void* _self, uint8_t* data, size_t size)
-{
-    UdpClientSocketInfo* self = (UdpClientSocketInfo*) _self;
-
-    return udpClientReceive(self->clientSocket, data, size);
-}
-
-typedef struct Secret {
-    GuiseSerializeUserId userId;
-    uint64_t passwordHash;
-} Secret;
-
-static int readSecret(Secret* secret)
-{
-    CLOG_DEBUG("reading secret file")
-    FILE* fp = fopen("users.txt", "r");
-    if (fp == 0) {
-        CLOG_ERROR("could not find users.txt")
-        //        return -4;
-    }
-
-    char line[1024];
-    char* ptr = fgets(line, 1024, fp);
-    if (ptr == 0) {
-        return -39;
-    }
-    fclose(fp);
-
-    FldTextInStream textInStream;
-    FldInStream inStream;
-
-    fldInStreamInit(&inStream, (const uint8_t*) line, tc_strlen(line));
-    fldTextInStreamInit(&textInStream, &inStream);
-
-    GuiseSerializeUserInfo userInfo;
-
-    int err = guiseTextStreamReadUser(&textInStream, &userInfo);
-    if (err < 0) {
-        return err;
-    }
-
-    secret->userId = userInfo.userId;
-    secret->passwordHash = userInfo.passwordHash;
-
-    return 0;
-}
-
 int main(int argc, char* argv[])
 {
     (void) argc;
@@ -104,12 +47,22 @@ int main(int argc, char* argv[])
 
     CLOG_OUTPUT("relay daemon v%s starting up", RELAY_DAEMON_VERSION)
 
-    Secret secret;
-    int secretErr = readSecret(&secret);
-    if (secretErr < 0) {
-        CLOG_SOFT_ERROR("could not read lines from secret.txt %d", secretErr)
-        return secretErr;
-    }
+    ImprintDefaultSetup memory;
+    imprintDefaultSetupInit(&memory, 16 * 1024 * 1024);
+
+    GuiseClientUdp guiseClient;
+
+    Clog guiseClientLog;
+    guiseClientLog.config = &g_clog;
+    guiseClientLog.constantPrefix = "GuiseClient";
+
+    const char* guiseHost = "127.0.0.1";
+    uint16_t guisePort = 27004;
+
+    GuiseClientUdpSecret secret;
+    guiseClientUdpReadSecret(&secret, 0);
+
+    guiseClientUdpInit(&guiseClient, &memory.tagAllocator.info, guiseHost, guisePort, &secret);
 
     RelayDaemon daemon;
 
@@ -130,39 +83,11 @@ int main(int argc, char* argv[])
 
     RelayServer server;
 
-    ImprintDefaultSetup memory;
-    imprintDefaultSetupInit(&memory, 16 * 1024 * 1024);
-
     // TODO:    ConclaveSerializeVersion applicationVersion = {0x10, 0x20, 0x30};
 
     Clog serverLog;
     serverLog.constantPrefix = "RelayServer";
     serverLog.config = &g_clog;
-
-    UdpClientSocket udpClient;
-    const static char* GUISE_SERVER_URL = "127.0.0.1";
-    int udpClientErr = udpClientInit(&udpClient, GUISE_SERVER_URL, 27004);
-    if (udpClientErr < 0) {
-        return udpClientErr;
-    }
-
-    UdpClientSocketInfo guiseSocket;
-    guiseSocket.clientSocket = &udpClient;
-
-    DatagramTransport guiseTransport;
-    guiseTransport.receive = udpClientSocketInfoReceive;
-    guiseTransport.send = udpClientSocketInfoSend;
-    guiseTransport.self = &guiseSocket;
-
-    GuiseClient guiseClient;
-
-    Clog guiseClientLog;
-    guiseClientLog.config = &g_clog;
-    guiseClientLog.constantPrefix = "GuiseClient";
-
-    guiseClientInit(&guiseClient, &memory.tagAllocator.info, guiseClientLog);
-    guiseClientReInit(&guiseClient, &guiseTransport, secret.userId, secret.passwordHash);
-    GuiseClientState reportedState = GuiseClientStateIdle;
 
     uint8_t buf[DATAGRAM_TRANSPORT_MAX_SIZE];
     struct sockaddr_in address;
@@ -174,7 +99,7 @@ int main(int argc, char* argv[])
 
     CLOG_OUTPUT("ready for incoming UDP packets")
     bool hasCreatedRelayServer = false;
-
+    GuiseClientState reportedState = GuiseClientStateIdle;
     while (true) {
         struct timespec ts;
 
@@ -185,17 +110,17 @@ int main(int argc, char* argv[])
         if (!hasCreatedRelayServer) {
 
             MonotonicTimeMs now = monotonicTimeMsNow();
-            guiseClientUpdate(&guiseClient, now);
+            guiseClientUdpUpdate(&guiseClient, now);
         }
 
-        if (reportedState != guiseClient.state) {
-            reportedState = guiseClient.state;
+        if (reportedState != guiseClient.guiseClient.state) {
+            reportedState = guiseClient.guiseClient.state;
             if (reportedState == GuiseClientStateLoggedIn && !hasCreatedRelayServer) {
-                relayServerInit(&server, &memory.tagAllocator.info, guiseClient.mainUserSessionId,
-                                guiseTransport, serverLog);
+                relayServerInit(&server, &memory.tagAllocator.info, guiseClient.guiseClient.mainUserSessionId,
+                                guiseClient.transport, serverLog);
                 CLOG_C_INFO(&server.log, "server authenticated")
                 hasCreatedRelayServer = true;
-                guiseClientDestroy(&guiseClient);
+                // guiseClientUdpDestroy(&guiseClient);
             }
         }
         if (!hasCreatedRelayServer) {

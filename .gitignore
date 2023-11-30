@@ -17,3 +17,4 @@ src/lib/users.txt
 deps*/
 .vscode/
 build/
+users.txt

@@ -13,7 +13,6 @@ target_include_directories(relay-daemon PRIVATE ../include)
 
 target_link_libraries(relay-daemon PUBLIC 
   relay-server-lib
-  guise-client
   udp-server
-  udp-client)
+  guise-client-udp)
 
