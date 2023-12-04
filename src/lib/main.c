@@ -34,7 +34,7 @@ static int sendToAddress(void* self_, const RelayAddress* address, const uint8_t
     (void) address;
     UdpServerSocketSendToAddress* self = (UdpServerSocketSendToAddress*) self_;
 
-    return udpServerSend(self->serverSocket, buf, count, self->sockAddrIn);
+    return udpServerSend(self->serverSocket, buf, count, address);
 }
 
 int main(int argc, char* argv[])
